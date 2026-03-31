@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat IA Gemini</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #e5ddd5; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        #chat-container { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .message { max-width: 70%; padding: 10px 15px; border-radius: 15px; font-size: 14px; line-height: 1.4; }
+        .ai { align-self: flex-start; background-color: white; color: #333; border-bottom-left-radius: 2px; }
+        .user { align-self: flex-end; background-color: #dcf8c6; color: #333; border-bottom-right-radius: 2px; }
+        #input-area { background: #f0f0f0; padding: 15px; display: flex; gap: 10px; border-top: 1px solid #ddd; }
+        input { flex: 1; padding: 12px; border: none; border-radius: 25px; outline: none; }
+        button { background-color: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 25px; cursor: pointer; font-weight: bold; }
+        button:disabled { background-color: #ccc; }
+    </style>
+</head>
+<body>
+
+    <div id="chat-container">
+        <div class="message ai">Olá, posso ajudar?</div>
+    </div>
+
+    <div id="input-area">
+        <input type="text" id="user-input" placeholder="Digite sua mensagem...">
+        <button id="send-btn">Enviar</button>
+    </div>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            div.classList.add('message', sender);
+            div.innerText = text;
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight; // Rola para o fim
+        }
+
+async function sendMessage() {
+    const message = userInput.value.trim();
+    if (!message) return;
+
+    addMessage(message, 'user');
+    userInput.value = '';
+    sendBtn.disabled = true;
+
+    try {
+        const response = await fetch('http://localhost:3000/api/chat', { // MUDOU AQUI
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pergunta: message }) // MUDOU AQUI (de mensagem para pergunta)
+        });
+        
+        const data = await response.json();
+        // Se a API retornar 'resposta', usamos data.resposta
+        addMessage(data.resposta, 'ai'); 
+    } catch (error) {
+        addMessage("Ops, deu um erro aqui...", 'ai');
+    } finally {
+        sendBtn.disabled = false;
+    }
+}
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
