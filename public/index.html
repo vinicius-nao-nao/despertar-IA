@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat IA Gemini</title>
+    <!-- Script do Marked.js para interpretar o Markdown retornado pela IA -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: sans-serif; background-color: #e5ddd5; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        #header { background: #075e54; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 70%; padding: 10px; border-radius: 10px; margin: 5px; word-wrap: break-word; }
+        .ai { align-self: flex-start; background: white; }
+        .user { align-self: flex-end; background: #dcf8c6; }
+        #input-area { background: #eee; padding: 20px; display: flex; gap: 10px; }
+        input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; }
+        button { background: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: bold; }
+        .btn-limpar { background: #d9534f; }
+        
+        /* Ajustes visuais para Markdown renderizado */
+        .msg p { margin: 5px 0; }
+        .msg code { background: #f4f4f4; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
+        .msg pre { background: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 5px; overflow-x: auto; margin: 10px 0; }
+        .msg pre code { background: none; color: inherit; padding: 0; }
+        .msg ul, .msg ol { margin: 5px 0; padding-left: 20px; }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <span>Chat IA Gemini</span>
+        <button class="btn-limpar" onclick="limparConversa()">🗑️ Limpar Conversa</button>
+    </div>
+    
+    <div id="chat">
+        <div class="msg ai"><p>Olá! Como posso te ajudar hoje?</p></div>
+    </div>
+    
+    <div id="input-area">
+        <input type="text" id="pergunta" placeholder="Digite sua mensagem...">
+        <button onclick="enviar()">Enviar</button>
+    </div>
+
+    <script>
+        const chat = document.getElementById('chat');
+        const input = document.getElementById('pergunta');
+
+        function addMsg(texto, tipo) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + tipo;
+            
+            if (tipo === 'ai') {
+                // Traduz o Markdown do Gemini em blocos HTML
+                div.innerHTML = marked.parse(texto);
+            } else {
+                div.innerText = texto;
+            }
+            
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        async function enviar() {
+            const texto = input.value.trim();
+            if (!texto) return;
+
+            addMsg(texto, 'user');
+            input.value = '';
+
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pergunta: texto })
+                });
+
+                const data = await res.json();
+
+                if (data.sucesso) {
+                    addMsg(data.resposta, 'ai');
+                } else {
+                    addMsg("Erro: " + data.erro, 'ai');
+                }
+            } catch (err) {
+                addMsg("Erro de conexão com o servidor.", 'ai');
+            }
+        }
+
+        async function limparConversa() {
+            if (!confirm("Tem certeza que deseja apagar o histórico de mensagens?")) return;
+
+            try {
+                const res = await fetch('/api/chat/limpar', {
+                    method: 'DELETE'
+                });
+                const data = await res.json();
+
+                if (data.sucesso) {
+                    // Limpa a interface do usuário e restabelece a saudação
+                    chat.innerHTML = '<div class="msg ai"><p>Histórico limpo! Como posso te ajudar hoje?</p></div>';
+                } else {
+                    alert("Erro ao tentar limpar o histórico: " + data.erro);
+                }
+            } catch (err) {
+                alert("Erro ao tentar conectar ao servidor.");
+            }
+        }
+
+        input.addEventListener('keypress', (e) => { if(e.key === 'Enter') enviar(); });
+    </script>
+</body>
+</html>
