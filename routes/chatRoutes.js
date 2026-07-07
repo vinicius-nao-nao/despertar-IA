@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const chatController = require('../controllers/chatController');
 
-// POST /api/chat/ - Envia mensagem
+// Rota para enviar mensagem
 router.post('/', chatController.enviarMensagem);
 
-// DELETE /api/chat/limpar - Reseta histórico
+// Rota para limpar histórico (O erro estava aqui porque a função não existia no controller)
 router.delete('/limpar', chatController.limparHistorico);
 
 module.exports = router;

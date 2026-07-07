@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const chatRoutes = require('./routes/chatRoutes');
-
+const rankingRoutes = require('./routes/rankingRoutes');
 const app = express();
 
 // CONFIGURAÇÕES
@@ -24,6 +24,7 @@ mongoose.connect(mongoUri)
 
 // ROTAS
 app.use('/api/chat', chatRoutes);
+app.use('/api/ranking', rankingRoutes);
 
 const PORTA = process.env.PORT || 3000;
 app.listen(PORTA, () => {

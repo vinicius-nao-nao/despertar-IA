@@ -2,65 +2,112 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Chat IA Gemini</title>
-    <!-- Script do Marked.js para interpretar o Markdown retornado pela IA -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arena Gemini: O Mestre do Jogo</title>
+    <!-- Bibliotecas: Markdown e Confetes -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
     <style>
-        body { font-family: sans-serif; background-color: #e5ddd5; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        #header { background: #075e54; color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
-        #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 70%; padding: 10px; border-radius: 10px; margin: 5px; word-wrap: break-word; }
-        .ai { align-self: flex-start; background: white; }
-        .user { align-self: flex-end; background: #dcf8c6; }
-        #input-area { background: #eee; padding: 20px; display: flex; gap: 10px; }
-        input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #ccc; }
-        button { background: #25d366; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: bold; }
-        .btn-limpar { background: #d9534f; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: white; margin: 0; display: flex; flex-direction: column; height: 100vh; }
         
-        /* Ajustes visuais para Markdown renderizado */
-        .msg p { margin: 5px 0; }
-        .msg code { background: #f4f4f4; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em; }
-        .msg pre { background: #2d2d2d; color: #f8f8f2; padding: 10px; border-radius: 5px; overflow-x: auto; margin: 10px 0; }
-        .msg pre code { background: none; color: inherit; padding: 0; }
-        .msg ul, .msg ol { margin: 5px 0; padding-left: 20px; }
+        /* Header */
+        #header { background: #1f1f1f; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #00ff88; }
+        .logo { font-size: 1.5em; font-weight: bold; color: #00ff88; }
+        
+        /* Área de Login/Nickname */
+        #login-area { background: #2a2a2a; padding: 15px; display: flex; justify-content: center; gap: 10px; border-bottom: 1px solid #444; }
+        #nickname { padding: 10px; border-radius: 5px; border: none; width: 250px; outline: none; }
+        
+        /* Chat */
+        #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .msg { max-width: 80%; padding: 12px 18px; border-radius: 15px; line-height: 1.5; position: relative; }
+        .ai { align-self: flex-start; background: #333; border-left: 4px solid #00ff88; }
+        .user { align-self: flex-end; background: #005c4b; border-right: 4px solid #00ff88; }
+        
+        /* Input Area */
+        #input-area { background: #1f1f1f; padding: 20px; display: flex; gap: 10px; }
+        #pergunta { flex: 1; padding: 12px; border-radius: 25px; border: 1px solid #444; background: #333; color: white; outline: none; }
+        button { background: #00ff88; color: #121212; border: none; padding: 10px 25px; border-radius: 25px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #00cc6e; transform: scale(1.05); }
+        .btn-ranking { background: #f1c40f; color: black; }
+        .btn-limpar { background: #e74c3c; color: white; margin-left: 5px; }
+
+        /* Modal do Ranking */
+        #ranking-modal { 
+            display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 90%; max-width: 500px; background: #2a2a2a; border: 2px solid #00ff88;
+            border-radius: 15px; padding: 20px; z-index: 1000; box-shadow: 0 0 30px rgba(0,255,136,0.3);
+        }
+        #ranking-modal h2 { text-align: center; color: #f1c40f; margin-top: 0; }
+        .ranking-item { display: flex; justify-content: space-between; padding: 10px; border-bottom: 1px solid #444; }
+        .overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 999; }
+
+        /* Markdown Styles */
+        pre { background: #121212; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        code { font-family: monospace; color: #00ff88; }
     </style>
 </head>
 <body>
+
     <div id="header">
-        <span>Chat IA Gemini</span>
-        <button class="btn-limpar" onclick="limparConversa()">🗑️ Limpar Conversa</button>
+        <span class="logo">🎮 Mestre do Jogo IA</span>
+        <div>
+            <button class="btn-ranking" onclick="abrirRanking()">🏆 Ranking</button>
+            <button class="btn-limpar" onclick="limparConversa()">🗑️</button>
+        </div>
+    </div>
+
+    <div id="login-area">
+        <input type="text" id="nickname" placeholder="Digite seu Apelido para Jogar...">
     </div>
     
     <div id="chat">
-        <div class="msg ai"><p>Olá! Como posso te ajudar hoje?</p></div>
+        <div class="msg ai"><p>Bem-vindo, aventureiro! Digite seu nome acima e me envie um "Oi" para começarmos o desafio por XP!</p></div>
     </div>
     
     <div id="input-area">
-        <input type="text" id="pergunta" placeholder="Digite sua mensagem...">
+        <input type="text" id="pergunta" placeholder="Sua resposta ou pergunta...">
         <button onclick="enviar()">Enviar</button>
+    </div>
+
+    <!-- Modal Ranking -->
+    <div class="overlay" id="overlay" onclick="fecharRanking()"></div>
+    <div id="ranking-modal">
+        <h2>🏆 TOP 10 JOGADORES</h2>
+        <div id="ranking-lista">
+            <!-- Os itens do ranking entram aqui via JS -->
+        </div>
+        <br>
+        <button style="width: 100%;" onclick="fecharRanking()">Fechar</button>
     </div>
 
     <script>
         const chat = document.getElementById('chat');
         const input = document.getElementById('pergunta');
+        const nickInput = document.getElementById('nickname');
 
         function addMsg(texto, tipo) {
             const div = document.createElement('div');
             div.className = 'msg ' + tipo;
-            
-            if (tipo === 'ai') {
-                // Traduz o Markdown do Gemini em blocos HTML
-                div.innerHTML = marked.parse(texto);
-            } else {
-                div.innerText = texto;
-            }
-            
+            div.innerHTML = tipo === 'ai' ? marked.parse(texto) : `<p>${texto}</p>`;
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
+
+            // Se a IA der parabéns, solta confetes!
+            if (tipo === 'ai' && (texto.toLowerCase().includes("parabéns") || texto.toLowerCase().includes("acertou"))) {
+                dispararConfetes();
+            }
         }
 
         async function enviar() {
             const texto = input.value.trim();
+            const nickname = nickInput.value.trim();
+
+            if (!nickname) {
+                alert("⚠️ Você precisa de um Apelido para ganhar XP!");
+                return;
+            }
             if (!texto) return;
 
             addMsg(texto, 'user');
@@ -70,39 +117,66 @@
                 const res = await fetch('/api/chat', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ pergunta: texto })
+                    body: JSON.stringify({ pergunta: texto, nickname: nickname })
                 });
 
                 const data = await res.json();
-
                 if (data.sucesso) {
                     addMsg(data.resposta, 'ai');
                 } else {
-                    addMsg("Erro: " + data.erro, 'ai');
+                    addMsg("❌ Erro: " + data.erro, 'ai');
                 }
             } catch (err) {
-                addMsg("Erro de conexão com o servidor.", 'ai');
+                addMsg("⚠️ Erro de conexão.", 'ai');
             }
         }
 
-        async function limparConversa() {
-            if (!confirm("Tem certeza que deseja apagar o histórico de mensagens?")) return;
+        async function abrirRanking() {
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('ranking-modal').style.display = 'block';
+            
+            const lista = document.getElementById('ranking-lista');
+            lista.innerHTML = "Carregando...";
 
             try {
-                const res = await fetch('/api/chat/limpar', {
-                    method: 'DELETE'
-                });
+                const res = await fetch('/api/ranking');
                 const data = await res.json();
 
                 if (data.sucesso) {
-                    // Limpa a interface do usuário e restabelece a saudação
-                    chat.innerHTML = '<div class="msg ai"><p>Histórico limpo! Como posso te ajudar hoje?</p></div>';
-                } else {
-                    alert("Erro ao tentar limpar o histórico: " + data.erro);
+                    lista.innerHTML = "";
+                    data.ranking.forEach((player, index) => {
+                        const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : (index + 1) + "º";
+                        lista.innerHTML += `
+                            <div class="ranking-item">
+                                <span>${medal} <strong>${player.titulo} ${player.nome}</strong></span>
+                                <span style="color: #f1c40f;">${player.xp} XP</span>
+                            </div>
+                        `;
+                    });
                 }
             } catch (err) {
-                alert("Erro ao tentar conectar ao servidor.");
+                lista.innerHTML = "Erro ao carregar ranking.";
             }
+        }
+
+        function fecharRanking() {
+            document.getElementById('overlay').style.display = 'none';
+            document.getElementById('ranking-modal').style.display = 'none';
+        }
+
+        function dispararConfetes() {
+            confetti({
+                particleCount: 150,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#00ff88', '#f1c40f', '#ffffff']
+            });
+        }
+
+        async function limparConversa() {
+            if (!confirm("Resetar o chat?")) return;
+            await fetch('/api/chat/limpar', { method: 'DELETE' });
+            chat.innerHTML = '<div class="msg ai"><p>Histórico limpo! Vamos jogar de novo?</p></div>';
         }
 
         input.addEventListener('keypress', (e) => { if(e.key === 'Enter') enviar(); });
