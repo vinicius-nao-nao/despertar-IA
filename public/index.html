@@ -15,6 +15,9 @@
         #header { background: #1f1f1f; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #00ff88; }
         .logo { font-size: 1.5em; font-weight: bold; color: #00ff88; }
         
+        /* Indicador de Status (Adicionado) */
+        #status-indicator { width: 15px; height: 15px; border-radius: 50%; background: gray; margin-right: 10px; }
+        
         /* Área de Login/Nickname */
         #login-area { background: #2a2a2a; padding: 15px; display: flex; justify-content: center; gap: 10px; border-bottom: 1px solid #444; }
         #nickname { padding: 10px; border-radius: 5px; border: none; width: 250px; outline: none; }
@@ -52,7 +55,8 @@
 
     <div id="header">
         <span class="logo">🎮 Mestre do Jogo IA</span>
-        <div>
+        <div style="display: flex; align-items: center;">
+            <div id="status-indicator" title="Status do Servidor"></div>
             <button class="btn-ranking" onclick="abrirRanking()">🏆 Ranking</button>
             <button class="btn-limpar" onclick="limparConversa()">🗑️</button>
         </div>
@@ -87,6 +91,18 @@
         const input = document.getElementById('pergunta');
         const nickInput = document.getElementById('nickname');
 
+        // Função de Health Check (Nova)
+        async function checkHealth() {
+            try {
+                const res = await fetch('/api/health');
+                const indicator = document.getElementById('status-indicator');
+                indicator.style.backgroundColor = res.ok ? '#00ff88' : 'red';
+            } catch (err) {
+                document.getElementById('status-indicator').style.backgroundColor = 'red';
+            }
+        }
+        checkHealth(); setInterval(checkHealth, 60000); // Verifica a cada 1 minuto
+
         function addMsg(texto, tipo) {
             const div = document.createElement('div');
             div.className = 'msg ' + tipo;
@@ -94,7 +110,6 @@
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
 
-            // Se a IA der parabéns, solta confetes!
             if (tipo === 'ai' && (texto.toLowerCase().includes("parabéns") || texto.toLowerCase().includes("acertou"))) {
                 dispararConfetes();
             }
