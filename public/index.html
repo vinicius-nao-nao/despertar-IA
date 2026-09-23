@@ -53,6 +53,11 @@
 </head>
 <body>
 
+    <div id="upload-area" style="padding: 10px; background: #2a2a2a;">
+    <input type="file" id="docUpload" accept=".pdf, .txt">
+    <button onclick="enviarComDoc()">Analisar Documento</button>
+</div>
+
     <div id="header">
         <span class="logo">🎮 Mestre do Jogo IA</span>
         <div style="display: flex; align-items: center;">
@@ -195,6 +200,30 @@
         }
 
         input.addEventListener('keypress', (e) => { if(e.key === 'Enter') enviar(); });
+        
+        async function enviarComDoc() {
+    const fileInput = document.getElementById('docUpload');
+    const pergunta = document.getElementById('pergunta').value;
+    
+    if (!fileInput.files[0]) return alert("Selecione um arquivo!");
+
+    const formData = new FormData();
+    formData.append('arquivo', fileInput.files[0]);
+    formData.append('pergunta', pergunta);
+
+    // Adicione o token JWT que você tem no localStorage
+    const token = localStorage.getItem('token'); 
+
+    const res = await fetch('/api/chat/documento', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData
+    });
+
+    const data = await res.json();
+    if (data.sucesso) addMsg(data.resposta, 'ai');
+    else alert("Erro: " + data.erro);
+}
     </script>
 </body>
 </html>
