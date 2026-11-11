@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://bot-vinivius.onrender.com/api/:path*" },
+    { "source": "/dashboard", "destination": "https://bot-vinivius.onrender.com/dashboard" },
+    { "source": "/dashboard.html", "destination": "https://bot-vinivius.onrender.com/dashboard" },
+    { "source": "/config.js", "destination": "https://bot-vinivius.onrender.com/config.js" },
+    { "source": "/socket.io/:path*", "destination": "https://bot-vinivius.onrender.com/socket.io/:path*" }
+  ]
+}

@@ -1,0 +1,25 @@
+# Blueprint do Render: backend (API REST + Socket.IO + dashboard protegido).
+# No Render: New + > Blueprint > selecione este repositório.
+services:
+  - type: web
+    name: bot-vinivius
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGO_URI
+        sync: false            # preencha no painel do Render
+      - key: GEMINI_API_KEY
+        sync: false            # preencha no painel do Render
+      - key: JWT_SECRET
+        generateValue: true    # o Render gera um segredo aleatório
+      - key: CORS_ORIGINS
+        sync: false            # ex.: https://bot-vinivius.vercel.app
+      - key: TRUST_PROXY
+        value: "2"             # Vercel -> Render: o IP real do cliente está 2 proxies atrás
+      - key: ANALYTICS_TIMEZONE
+        value: America/Sao_Paulo

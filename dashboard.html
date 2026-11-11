@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Admin — Mestre do Jogo IA</title>
+
+    <!-- Chart.js (REQ-007) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Configuração pública (URL do WebSocket no Render) e cliente Socket.IO do próprio servidor -->
+    <script src="/config.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+
+    <style>
+        :root {
+            --bg: #121212;
+            --surface: #181a1b;
+            --surface-2: #1f2223;
+            --border: #2c3032;
+            --text: #f2f4f5;
+            --text-2: #a9b0b4;
+            --muted: #6f777b;
+            --brand: #00ff88;          /* identidade visual do chat */
+            --serie-tokens: #00b86b;
+            --serie-mensagens: #3d8fe0;
+            --serie-horas: #d4a20a;
+            --erro: #e74c3c;
+            --aviso: #f1c40f;
+            --radius: 14px;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; background: var(--bg); color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Topo */
+        header {
+            position: sticky; top: 0; z-index: 10;
+            background: rgba(18,18,18,.92); backdrop-filter: blur(8px);
+            border-bottom: 2px solid var(--brand);
+        }
+        .topo {
+            max-width: 1200px; margin: 0 auto; padding: 14px 16px;
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+        }
+        .logo { font-size: 1.25em; font-weight: 700; color: var(--brand); white-space: nowrap; }
+        .logo small { color: var(--text-2); font-weight: 400; font-size: .7em; margin-left: 6px; }
+        .acoes { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .usuario { color: var(--text-2); font-size: .9em; }
+
+        .ao-vivo {
+            display: inline-flex; align-items: center; gap: 8px; font-size: .85em; color: var(--text-2);
+            background: var(--surface-2); border: 1px solid var(--border); padding: 6px 12px; border-radius: 999px;
+        }
+        .ao-vivo .ponto { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+        .ao-vivo.conectado .ponto { background: var(--brand); box-shadow: 0 0 0 0 rgba(0,255,136,.6); animation: pulso 2s infinite; }
+        .ao-vivo.desconectado .ponto { background: var(--erro); }
+        @keyframes pulso { 70% { box-shadow: 0 0 0 8px rgba(0,255,136,0); } 100% { box-shadow: 0 0 0 0 rgba(0,255,136,0); } }
+
+        button, .botao {
+            background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+            padding: 8px 14px; border-radius: 999px; cursor: pointer; font: inherit; font-size: .9em;
+            text-decoration: none; transition: border-color .2s, background .2s;
+        }
+        button:hover, .botao:hover { border-color: var(--brand); }
+        button:focus-visible, .botao:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+        .botao-primario { background: var(--brand); color: #121212; border-color: var(--brand); font-weight: 700; }
+
+        main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+        h1 { font-size: 1.5em; margin: 0 0 4px; }
+        .subtitulo { color: var(--text-2); margin: 0 0 24px; font-size: .95em; }
+
+        /* Alertas */
+        .alerta {
+            display: none; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+            border: 1px solid var(--erro); background: rgba(231,76,60,.1); color: var(--text);
+            padding: 12px 16px; border-radius: var(--radius); margin-bottom: 20px;
+        }
+        .alerta.visivel { display: flex; }
+
+        /* Cards de métricas */
+        .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .card {
+            background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+            padding: 18px; min-width: 0;
+        }
+        .card-rotulo { color: var(--text-2); font-size: .85em; display: flex; align-items: center; gap: 8px; }
+        .card-rotulo .icone { font-size: 1.1em; }
+        .card-valor { font-size: 2em; font-weight: 700; margin: 8px 0 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+        .card-detalhe { color: var(--muted); font-size: .8em; }
+        .card.destaque { border-color: rgba(0,255,136,.45); }
+        .card-valor.piscar { animation: piscar .9s ease-out; }
+        @keyframes piscar { 0% { color: var(--brand); } 100% { color: var(--text); } }
+
+        /* Faixa de períodos */
+        .periodos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .periodo { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; }
+        .periodo strong { display: block; font-size: 1.15em; margin-top: 4px; font-variant-numeric: tabular-nums; }
+        .periodo span { color: var(--text-2); font-size: .82em; }
+
+        /* Gráficos */
+        .graficos { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+        .painel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; min-width: 0; }
+        .painel.largo { grid-column: 1 / -1; }
+        .painel h2 { font-size: 1em; margin: 0; }
+        .painel p { color: var(--text-2); font-size: .82em; margin: 4px 0 14px; }
+        .area-grafico { position: relative; height: 300px; }
+        .area-grafico.baixa { height: 240px; }
+
+        /* Carregamento */
+        .esqueleto {
+            background: linear-gradient(90deg, var(--surface-2) 25%, #2a2e30 50%, var(--surface-2) 75%);
+            background-size: 200% 100%; animation: brilho 1.4s infinite; border-radius: 8px; color: transparent !important;
+        }
+        @keyframes brilho { to { background-position: -200% 0; } }
+        .carregando-grafico {
+            position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-2); font-size: .9em;
+        }
+
+        details { margin-top: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; }
+        summary { cursor: pointer; color: var(--text-2); }
+        .tabela-wrap { overflow-x: auto; margin-top: 12px; }
+        table { border-collapse: collapse; width: 100%; font-size: .88em; font-variant-numeric: tabular-nums; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+        th:first-child, td:first-child { text-align: left; }
+        th { color: var(--text-2); font-weight: 600; }
+
+        .rodape { color: var(--muted); font-size: .8em; margin-top: 16px; }
+
+        @media (max-width: 900px) {
+            .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .graficos { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 560px) {
+            .cards, .periodos { grid-template-columns: 1fr; }
+            .card-valor { font-size: 1.7em; }
+            .area-grafico { height: 240px; }
+            .usuario { display: none; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            * { animation: none !important; transition: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="topo">
+            <span class="logo">🎮 Mestre do Jogo IA <small>Painel Admin</small></span>
+            <div class="acoes">
+                <span class="ao-vivo" id="statusTempoReal" title="Conexão em tempo real">
+                    <span class="ponto"></span><span id="statusTexto">Conectando…</span>
+                </span>
+                <span class="usuario" id="usuarioAtual"></span>
+                <button id="btnAtualizar" type="button">↻ Atualizar</button>
+                <a class="botao" href="/">💬 Chat</a>
+                <button id="btnSair" type="button">Sair</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <h1>Consumo de IA</h1>
+        <p class="subtitulo">Tokens consumidos pelo Google Gemini, mensagens e atividade dos usuários.</p>
+
+        <div class="alerta" id="alertaErro" role="alert">
+            <span id="alertaTexto">Não foi possível carregar os dados.</span>
+            <button type="button" id="btnTentarNovamente">Tentar novamente</button>
+        </div>
+
+        <section class="cards" aria-label="Métricas principais">
+            <article class="card">
+                <div class="card-rotulo"><span class="icone">👥</span> Total de usuários</div>
+                <div class="card-valor esqueleto" id="cardUsuarios">0000</div>
+                <div class="card-detalhe" id="cardUsuariosDetalhe">&nbsp;</div>
+            </article>
+            <article class="card">
+                <div class="card-rotulo"><span class="icone">💬</span> Total de mensagens</div>
+                <div class="card-valor esqueleto" id="cardMensagens">0000</div>
+                <div class="card-detalhe" id="cardMensagensDetalhe">&nbsp;</div>
+            </article>
+            <article class="card destaque">
+                <div class="card-rotulo"><span class="icone">⚡</span> Tokens consumidos</div>
+                <div class="card-valor esqueleto" id="cardTokens">0000</div>
+                <div class="card-detalhe" id="cardTokensDetalhe">&nbsp;</div>
+            </article>
+            <article class="card">
+                <div class="card-rotulo"><span class="icone">📐</span> Média por resposta da IA</div>
+                <div class="card-valor esqueleto" id="cardMedia">0000</div>
+                <div class="card-detalhe" id="cardMediaDetalhe">&nbsp;</div>
+            </article>
+        </section>
+
+        <section class="periodos" aria-label="Períodos">
+            <div class="periodo"><span>Últimos 7 dias</span><strong id="periodo7">—</strong></div>
+            <div class="periodo"><span>Últimos 30 dias</span><strong id="periodo30">—</strong></div>
+            <div class="periodo"><span>Horário de pico (30 dias)</span><strong id="horarioPico">—</strong></div>
+        </section>
+
+        <section class="graficos">
+            <div class="painel largo">
+                <h2>Tokens consumidos por dia</h2>
+                <p>Últimos 30 dias · soma de <code>tokensGastos</code> das respostas da IA</p>
+                <div class="area-grafico">
+                    <div class="carregando-grafico" id="carregandoTokens">Carregando…</div>
+                    <canvas id="graficoTokens"></canvas>
+                </div>
+            </div>
+            <div class="painel">
+                <h2>Mensagens por dia</h2>
+                <p>Perguntas dos jogadores + respostas da IA</p>
+                <div class="area-grafico baixa">
+                    <div class="carregando-grafico" id="carregandoMensagens">Carregando…</div>
+                    <canvas id="graficoMensagens" aria-label="Gráfico de mensagens por dia" role="img"></canvas>
+                </div>
+            </div>
+            <div class="painel">
+                <h2>Horários de maior uso</h2>
+                <p>Mensagens por hora do dia · últimos 30 dias</p>
+                <div class="area-grafico baixa">
+                    <div class="carregando-grafico" id="carregandoHoras">Carregando…</div>
+                    <canvas id="graficoHoras" aria-label="Gráfico de mensagens por hora do dia" role="img"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <details>
+            <summary>Ver dados diários em tabela</summary>
+            <div class="tabela-wrap">
+                <table>
+                    <thead><tr><th>Dia</th><th>Tokens</th><th>Mensagens</th><th>Tokens acumulados</th></tr></thead>
+                    <tbody id="tabelaDias"></tbody>
+                </table>
+            </div>
+        </details>
+
+        <p class="rodape" id="rodape"></p>
+    </main>
+
+    <script>
+        // ===== Estado =====
+        const formatador = new Intl.NumberFormat('pt-BR');
+        let dados = null;                       // última resposta da API (fonte da verdade)
+        let fusoHorario = 'America/Sao_Paulo';
+        let graficoTokens, graficoMensagens, graficoHoras;
+        let buscando = false;
+        let buscarDeNovo = false;
+        let ressincronizarTimer = null;
+        const eventosAplicados = new Set();     // evita contar o mesmo evento duas vezes
+
+        const el = (id) => document.getElementById(id);
+
+        // Token JWT: mesmo mecanismo do chat (localStorage "token")
+        function obterToken() {
+            try { return localStorage.getItem('token'); } catch (e) { return null; }
+        }
+
+        function irParaLogin() {
+            window.location.href = '/login.html?proximo=/dashboard';
+        }
+
+        function mostrarErro(texto) {
+            el('alertaTexto').textContent = texto;
+            el('alertaErro').classList.add('visivel');
+        }
+        function esconderErro() { el('alertaErro').classList.remove('visivel'); }
+
+        // ===== Gráficos =====
+        Chart.defaults.color = '#a9b0b4';
+        Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+        Chart.defaults.borderColor = '#2c3032';
+
+        function rotuloDia(chave) {
+            const [, mes, dia] = chave.split('-');
+            return `${dia}/${mes}`;
+        }
+
+        function opcoesBase(unidade) {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 400 },
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: false },  // série única: o título do painel a identifica
+                    tooltip: {
+                        backgroundColor: '#0d0f10', borderColor: '#2c3032', borderWidth: 1,
+                        titleColor: '#f2f4f5', bodyColor: '#f2f4f5', padding: 10, displayColors: false,
+                        callbacks: { label: (ctx) => `${formatador.format(ctx.parsed.y)} ${unidade}` }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 12 } },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255,255,255,.06)' },
+                        border: { display: false },
+                        ticks: { precision: 0, callback: (v) => formatador.format(v) }
+                    }
+                }
+            };
+        }
+
+        function criarGraficos() {
+            el('graficoTokens').setAttribute('role', 'img');
+            el('graficoTokens').setAttribute('aria-label', 'Gráfico de tokens consumidos por dia');
+            graficoTokens = new Chart(el('graficoTokens'), {
+                type: 'bar',
+                data: { labels: [], datasets: [{
+                    label: 'Tokens', data: [],
+                    backgroundColor: '#00b86b', hoverBackgroundColor: '#00ff88',
+                    borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom',
+                    maxBarThickness: 28, categoryPercentage: .8, barPercentage: .9
+                }] },
+                options: opcoesBase('tokens')
+            });
+
+            graficoMensagens = new Chart(el('graficoMensagens'), {
+                type: 'line',
+                data: { labels: [], datasets: [{
+                    label: 'Mensagens', data: [],
+                    borderColor: '#3d8fe0', backgroundColor: 'rgba(61,143,224,.15)', fill: true,
+                    borderWidth: 2, cubicInterpolationMode: 'monotone', pointRadius: 0, pointHoverRadius: 5,
+                    pointHoverBackgroundColor: '#3d8fe0', pointHoverBorderColor: '#181a1b', pointHoverBorderWidth: 2
+                }] },
+                options: opcoesBase('mensagens')
+            });
+
+            const opcoesHoras = opcoesBase('mensagens');
+            opcoesHoras.plugins.tooltip.callbacks.title = (itens) => `${itens[0].label}h – ${itens[0].label}h59`;
+            graficoHoras = new Chart(el('graficoHoras'), {
+                type: 'bar',
+                data: { labels: [], datasets: [{
+                    label: 'Mensagens', data: [],
+                    backgroundColor: '#d4a20a', hoverBackgroundColor: '#f1c40f',
+                    borderRadius: { topLeft: 4, topRight: 4 }, borderSkipped: 'bottom',
+                    categoryPercentage: .85, barPercentage: .9
+                }] },
+                options: opcoesHoras
+            });
+        }
+
+        // ===== Renderização =====
+        function definirValor(id, texto, piscar) {
+            const alvo = el(id);
+            alvo.classList.remove('esqueleto');
+            alvo.textContent = texto;
+            if (piscar) {
+                alvo.classList.remove('piscar');
+                void alvo.offsetWidth; // reinicia a animação
+                alvo.classList.add('piscar');
+            }
+        }
+
+        function renderizar(piscarTokens) {
+            const t = dados.totais;
+
+            definirValor('cardUsuarios', formatador.format(t.usuarios));
+            el('cardUsuariosDetalhe').textContent = `${formatador.format(t.jogadores)} jogadores no ranking`;
+
+            definirValor('cardMensagens', formatador.format(t.mensagens));
+            el('cardMensagensDetalhe').textContent = `${formatador.format(t.respostasIA)} respostas da IA`;
+
+            definirValor('cardTokens', formatador.format(t.tokens), piscarTokens);
+            const origem = dados.porOrigem || { chat: { tokens: 0 }, documento: { tokens: 0 } };
+            el('cardTokensDetalhe').textContent =
+                `${formatador.format(t.tokensEntrada)} entrada · ${formatador.format(t.tokensSaida)} saída · ` +
+                `${formatador.format(origem.documento.tokens)} em documentos`;
+
+            definirValor('cardMedia', t.respostasComTokens ? formatador.format(t.mediaTokensPorResposta) : '—', piscarTokens);
+            el('cardMediaDetalhe').textContent = t.respostasComTokens
+                ? `tokens · ${formatador.format(t.respostasComTokens)} respostas com consumo registrado`
+                : 'nenhuma resposta com consumo registrado ainda';
+
+            const p = dados.periodos;
+            el('periodo7').textContent = `${formatador.format(p.ultimos7Dias.tokens)} tokens · ${formatador.format(p.ultimos7Dias.mensagens)} msgs`;
+            el('periodo30').textContent = `${formatador.format(p.ultimos30Dias.tokens)} tokens · ${formatador.format(p.ultimos30Dias.mensagens)} msgs`;
+            el('horarioPico').textContent = dados.horarioDePico
+                ? `${String(dados.horarioDePico.hora).padStart(2, '0')}h · ${formatador.format(dados.horarioDePico.mensagens)} msgs`
+                : 'Sem atividade';
+
+            const labelsDias = dados.porDia.map(d => rotuloDia(d.data));
+            graficoTokens.data.labels = labelsDias;
+            graficoTokens.data.datasets[0].data = dados.porDia.map(d => d.tokens);
+            graficoTokens.update();
+
+            graficoMensagens.data.labels = labelsDias;
+            graficoMensagens.data.datasets[0].data = dados.porDia.map(d => d.mensagens);
+            graficoMensagens.update();
+
+            graficoHoras.data.labels = dados.porHora.map(h => String(h.hora).padStart(2, '0'));
+            graficoHoras.data.datasets[0].data = dados.porHora.map(h => h.mensagens);
+            graficoHoras.update();
+
+            ['carregandoTokens', 'carregandoMensagens', 'carregandoHoras'].forEach(id => el(id).style.display = 'none');
+
+            const corpo = el('tabelaDias');
+            corpo.replaceChildren(...dados.porDia.slice().reverse().map(d => {
+                const tr = document.createElement('tr');
+                [rotuloDia(d.data), formatador.format(d.tokens), formatador.format(d.mensagens), formatador.format(d.acumulado)]
+                    .forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+                return tr;
+            }));
+
+            el('rodape').textContent =
+                `Atualizado em ${new Date(dados.geradoEm).toLocaleString('pt-BR')} · fuso ${dados.fusoHorario}`;
+        }
+
+        // ===== API =====
+        async function carregarDados() {
+            const token = obterToken();
+            if (!token) { irParaLogin(); return; }
+            if (buscando) { buscarDeNovo = true; return; }   // evento chegou durante a busca
+            buscando = true;
+
+            try {
+                const res = await fetch('/api/analytics/tokens', {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    cache: 'no-store'
+                });
+
+                if (res.status === 401) { irParaLogin(); return; }
+                if (res.status === 403) {
+                    mostrarErro('Acesso negado: sua conta não tem permissão de administrador.');
+                    return;
+                }
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+                const json = await res.json();
+                if (!json.sucesso) throw new Error(json.erro || 'Resposta inválida');
+
+                dados = json;
+                fusoHorario = json.fusoHorario || fusoHorario;
+                eventosAplicados.clear();      // a API já inclui tudo o que foi persistido até aqui
+                esconderErro();
+                renderizar(false);
+            } catch (err) {
+                console.error(err);
+                mostrarErro('Não foi possível carregar os dados do painel. Verifique sua conexão e tente novamente.');
+            } finally {
+                buscando = false;
+                if (buscarDeNovo) { buscarDeNovo = false; carregarDados(); }
+            }
+        }
+
+        // Após um evento ao vivo, sincroniza com a API (mensagens, média e horários)
+        function agendarRessincronizacao() {
+            clearTimeout(ressincronizarTimer);
+            ressincronizarTimer = setTimeout(carregarDados, 2000);
+        }
+
+        function chaveDoDiaAtual(dataISO) {
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: fusoHorario, year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(dataISO ? new Date(dataISO) : new Date());
+        }
+
+        // ===== Tempo real (Socket.IO) =====
+        function conectarTempoReal() {
+            if (typeof io === 'undefined') return;
+            const status = el('statusTempoReal');
+
+            // No Vercel o WebSocket vai direto ao Render; acessando o Render direto, usa a mesma origem
+            const config = window.APP_CONFIG || {};
+            const opcoes = { auth: { token: obterToken() }, transports: ['websocket', 'polling'] };
+            const socket = config.socketUrl ? io(config.socketUrl, opcoes) : io(opcoes);
+
+            socket.on('connect', () => {
+                status.className = 'ao-vivo conectado';
+                el('statusTexto').textContent = 'Ao vivo';
+                // A cada (re)conexão a API é a fonte da verdade: cobre eventos perdidos
+                // enquanto o socket estava fora e substitui o estado (sem duplicar contagens)
+                carregarDados();
+            });
+
+            socket.on('disconnect', () => {
+                status.className = 'ao-vivo desconectado';
+                el('statusTexto').textContent = 'Reconectando…';
+            });
+
+            socket.on('connect_error', (err) => {
+                status.className = 'ao-vivo desconectado';
+                el('statusTexto').textContent = 'Offline';
+                if (err && err.message === 'nao_autenticado') socket.disconnect();
+            });
+
+            socket.on('sessao', (info) => {
+                if (!info.salaAdmin) {
+                    el('statusTexto').textContent = 'Sem permissão';
+                    socket.disconnect();
+                }
+            });
+
+            // Evento solicitado pela atividade: novoGastoDeToken(quantidade)
+            socket.on('novoGastoDeToken', (quantidade, meta) => {
+                const valor = Number(quantidade);
+                if (!dados || !Number.isFinite(valor) || valor <= 0) return;
+
+                const id = meta && meta.mensagemId;
+                if (id) {
+                    if (eventosAplicados.has(id)) return;   // duplicado
+                    eventosAplicados.add(id);
+                }
+
+                // Atualização imediata, sem F5
+                dados.totais.tokens += valor;
+                dados.periodos.ultimos7Dias.tokens += valor;
+                dados.periodos.ultimos30Dias.tokens += valor;
+                const hoje = chaveDoDiaAtual(meta && meta.criadoEm);
+                const dia = dados.porDia.find(d => d.data === hoje);
+                if (dia) dia.tokens += valor;
+                renderizar(true);
+
+                // Depois confirma tudo com a API (mensagens, média, horário de pico)
+                agendarRessincronizacao();
+            });
+        }
+
+        // ===== Usuário / ações =====
+        async function carregarUsuario() {
+            const token = obterToken();
+            if (!token) return;
+            try {
+                const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) {
+                    const { usuario } = await res.json();
+                    el('usuarioAtual').textContent = `${usuario.nome} · ${usuario.role}`;
+                }
+            } catch (e) { /* não crítico */ }
+        }
+
+        el('btnAtualizar').addEventListener('click', carregarDados);
+        el('btnTentarNovamente').addEventListener('click', carregarDados);
+        el('btnSair').addEventListener('click', async () => {
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+            try { localStorage.removeItem('token'); } catch (e) {}
+            window.location.href = '/login.html';
+        });
+
+        criarGraficos();
+        carregarUsuario();
+        carregarDados().then(conectarTempoReal);
+    </script>
+</body>
+</html>

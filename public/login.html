@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrar — Mestre do Jogo IA</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: white;
+            margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+        }
+        .caixa {
+            width: 100%; max-width: 400px; background: #1f1f1f; border: 1px solid #333;
+            border-top: 3px solid #00ff88; border-radius: 15px; padding: 28px 24px;
+        }
+        .logo { font-size: 1.4em; font-weight: bold; color: #00ff88; text-align: center; margin-bottom: 18px; }
+        .abas { display: flex; gap: 6px; background: #2a2a2a; border-radius: 25px; padding: 4px; margin-bottom: 20px; }
+        .abas button {
+            flex: 1; background: transparent; color: #bbb; border: none; padding: 9px; border-radius: 25px;
+            cursor: pointer; font: inherit; font-weight: 600;
+        }
+        .abas button.ativa { background: #00ff88; color: #121212; }
+        label { display: block; font-size: .85em; color: #bbb; margin: 12px 0 6px; }
+        input {
+            width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #444; background: #333;
+            color: white; outline: none; font: inherit;
+        }
+        input:focus { border-color: #00ff88; }
+        .enviar {
+            width: 100%; margin-top: 20px; background: #00ff88; color: #121212; border: none; padding: 12px;
+            border-radius: 25px; cursor: pointer; font: inherit; font-weight: bold;
+        }
+        .enviar:disabled { opacity: .6; cursor: wait; }
+        .mensagem { min-height: 1.4em; margin-top: 14px; font-size: .9em; text-align: center; }
+        .mensagem.erro { color: #e74c3c; }
+        .mensagem.ok { color: #00ff88; }
+        .voltar { display: block; text-align: center; margin-top: 16px; color: #888; font-size: .85em; }
+        .oculto { display: none; }
+    </style>
+</head>
+<body>
+    <div class="caixa">
+        <div class="logo">🎮 Mestre do Jogo IA</div>
+        <div class="abas" role="tablist">
+            <button type="button" id="abaLogin" class="ativa">Entrar</button>
+            <button type="button" id="abaCadastro">Criar conta</button>
+        </div>
+
+        <form id="formulario">
+            <div id="campoNome" class="oculto">
+                <label for="nome">Nome</label>
+                <input id="nome" autocomplete="name">
+            </div>
+            <label for="email">Email</label>
+            <input id="email" type="email" autocomplete="email" required>
+            <label for="senha">Senha</label>
+            <input id="senha" type="password" autocomplete="current-password" minlength="6" required>
+            <button class="enviar" id="btnEnviar" type="submit">Entrar</button>
+            <div class="mensagem" id="mensagem" role="status"></div>
+        </form>
+        <a class="voltar" href="/">← Voltar ao chat</a>
+    </div>
+
+    <script>
+        let modo = 'login';
+        const $ = (id) => document.getElementById(id);
+
+        // Só aceita redirecionar para caminhos internos (evita open redirect)
+        function destinoSeguro() {
+            const proximo = new URLSearchParams(location.search).get('proximo');
+            return proximo && proximo.startsWith('/') && !proximo.startsWith('//') ? proximo : '/';
+        }
+
+        function trocarModo(novo) {
+            modo = novo;
+            $('abaLogin').classList.toggle('ativa', modo === 'login');
+            $('abaCadastro').classList.toggle('ativa', modo === 'cadastro');
+            $('campoNome').classList.toggle('oculto', modo === 'login');
+            $('btnEnviar').textContent = modo === 'login' ? 'Entrar' : 'Criar conta';
+            $('senha').autocomplete = modo === 'login' ? 'current-password' : 'new-password';
+            $('mensagem').textContent = '';
+        }
+        $('abaLogin').onclick = () => trocarModo('login');
+        $('abaCadastro').onclick = () => trocarModo('cadastro');
+
+        $('formulario').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = $('mensagem');
+            msg.className = 'mensagem';
+            msg.textContent = '';
+            $('btnEnviar').disabled = true;
+
+            const corpo = { email: $('email').value, senha: $('senha').value };
+            if (modo === 'cadastro') corpo.nome = $('nome').value;
+
+            try {
+                const res = await fetch(modo === 'login' ? '/api/auth/login' : '/api/auth/registrar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(corpo)
+                });
+                const data = await res.json();
+                if (!res.ok || !data.sucesso) throw new Error(data.erro || 'Falha na autenticação');
+
+                // Mesmo mecanismo já usado pelo chat (upload de documentos)
+                localStorage.setItem('token', data.token);
+                msg.className = 'mensagem ok';
+                msg.textContent = `Bem-vindo, ${data.usuario.nome}!`;
+                setTimeout(() => { location.href = destinoSeguro(); }, 400);
+            } catch (err) {
+                msg.className = 'mensagem erro';
+                msg.textContent = err.message;
+            } finally {
+                $('btnEnviar').disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

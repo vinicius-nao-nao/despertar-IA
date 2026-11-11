@@ -6,6 +6,8 @@
     <title>Arena Gemini: O Mestre do Jogo</title>
     <!-- Bibliotecas: Markdown e Confetes -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Sanitiza o HTML gerado a partir do Markdown da IA (evita XSS) -->
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     
     <style>
@@ -64,6 +66,9 @@
             <div id="status-indicator" title="Status do Servidor"></div>
             <button class="btn-ranking" onclick="abrirRanking()">🏆 Ranking</button>
             <button class="btn-limpar" onclick="limparConversa()">🗑️</button>
+            <a id="link-conta" href="/login.html" style="color: #00ff88; margin-left: 15px; text-decoration: none; font-weight: bold;">👤 Entrar</a>
+            <!-- Exibido apenas para admins; o acesso real é validado no servidor (/dashboard) -->
+            <a id="link-painel" href="/dashboard" style="display: none; color: #f1c40f; margin-left: 15px; text-decoration: none; font-weight: bold;">📊 Painel</a>
         </div>
     </div>
 
@@ -108,10 +113,31 @@
         }
         checkHealth(); setInterval(checkHealth, 60000); // Verifica a cada 1 minuto
 
+        // Mostra o usuário logado e o link do painel (somente admins)
+        async function verificarConta() {
+            const token = localStorage.getItem('token');
+            if (!token) return;
+            try {
+                const res = await fetch('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) return;
+                const { usuario } = await res.json();
+                document.getElementById('link-conta').textContent = '👤 ' + usuario.nome;
+                if (usuario.role === 'admin') document.getElementById('link-painel').style.display = 'inline';
+            } catch (err) { /* não crítico */ }
+        }
+        verificarConta();
+
         function addMsg(texto, tipo) {
             const div = document.createElement('div');
             div.className = 'msg ' + tipo;
-            div.innerHTML = tipo === 'ai' ? marked.parse(texto) : `<p>${texto}</p>`;
+            if (tipo === 'ai') {
+                // A resposta da IA pode conter HTML (ex.: induzido por um documento malicioso)
+                div.innerHTML = DOMPurify.sanitize(marked.parse(texto));
+            } else {
+                const p = document.createElement('p');
+                p.textContent = texto; // texto do usuário nunca é interpretado como HTML
+                div.appendChild(p);
+            }
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
 
@@ -151,6 +177,10 @@
             }
         }
 
+        function escaparHtml(valor) {
+            return String(valor).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
         async function abrirRanking() {
             document.getElementById('overlay').style.display = 'block';
             document.getElementById('ranking-modal').style.display = 'block';
@@ -168,8 +198,8 @@
                         const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : (index + 1) + "º";
                         lista.innerHTML += `
                             <div class="ranking-item">
-                                <span>${medal} <strong>${player.titulo} ${player.nome}</strong></span>
-                                <span style="color: #f1c40f;">${player.xp} XP</span>
+                                <span>${medal} <strong>${escaparHtml(player.titulo)} ${escaparHtml(player.nome)}</strong></span>
+                                <span style="color: #f1c40f;">${escaparHtml(player.xp)} XP</span>
                             </div>
                         `;
                     });
@@ -195,35 +225,61 @@
 
         async function limparConversa() {
             if (!confirm("Resetar o chat?")) return;
-            await fetch('/api/chat/limpar', { method: 'DELETE' });
-            chat.innerHTML = '<div class="msg ai"><p>Histórico limpo! Vamos jogar de novo?</p></div>';
+            // A tela é limpa para qualquer jogador; o histórico no banco só é apagado por administradores
+            const token = localStorage.getItem('token');
+            let mensagem = 'Conversa reiniciada! Vamos jogar de novo?';
+            if (token) {
+                try {
+                    const res = await fetch('/api/chat/limpar', { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                    if (res.ok) mensagem = 'Histórico limpo! Vamos jogar de novo?';
+                } catch (err) { /* segue limpando só a tela */ }
+            }
+            chat.innerHTML = `<div class="msg ai"><p>${mensagem}</p></div>`;
         }
 
         input.addEventListener('keypress', (e) => { if(e.key === 'Enter') enviar(); });
         
         async function enviarComDoc() {
-    const fileInput = document.getElementById('docUpload');
-    const pergunta = document.getElementById('pergunta').value;
-    
-    if (!fileInput.files[0]) return alert("Selecione um arquivo!");
+            const fileInput = document.getElementById('docUpload');
+            const pergunta = document.getElementById('pergunta').value.trim();
 
-    const formData = new FormData();
-    formData.append('arquivo', fileInput.files[0]);
-    formData.append('pergunta', pergunta);
+            if (!fileInput.files[0]) return alert("Selecione um arquivo!");
+            if (!pergunta) return alert("Digite uma pergunta sobre o documento!");
 
-    // Adicione o token JWT que você tem no localStorage
-    const token = localStorage.getItem('token'); 
+            // A análise de documentos exige login (JWT salvo pela página /login.html)
+            const token = localStorage.getItem('token');
+            if (!token) {
+                if (confirm("Faça login para analisar documentos. Ir para o login agora?")) location.href = '/login.html?proximo=/';
+                return;
+            }
 
-    const res = await fetch('/api/chat/documento', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData
-    });
+            const formData = new FormData();
+            formData.append('arquivo', fileInput.files[0]);
+            formData.append('pergunta', pergunta);
 
-    const data = await res.json();
-    if (data.sucesso) addMsg(data.resposta, 'ai');
-    else alert("Erro: " + data.erro);
-}
+            addMsg(`📄 ${fileInput.files[0].name}: ${pergunta}`, 'user');
+            input.value = '';
+
+            try {
+                const res = await fetch('/api/chat/documento', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: formData
+                });
+
+                if (res.status === 401) {
+                    localStorage.removeItem('token');
+                    addMsg("🔒 Sua sessão expirou. Faça login novamente para analisar documentos.", 'ai');
+                    return;
+                }
+
+                const data = await res.json();
+                if (data.sucesso) addMsg(data.resposta, 'ai');
+                else addMsg("❌ Erro: " + data.erro, 'ai');
+            } catch (err) {
+                addMsg("⚠️ Erro de conexão.", 'ai');
+            }
+        }
     </script>
 </body>
 </html>
